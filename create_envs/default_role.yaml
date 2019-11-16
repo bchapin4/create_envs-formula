@@ -1,0 +1,12 @@
+# -*- coding: utf-8 -*-
+# vim: ft=jinja
+
+{## We may want to make this a bit more intricate as things go, but for now will start with this ##}
+
+{% if "mom" in grains['id'] %}
+default_role: mom
+{% elif "rsm" in grains['id'] %}
+default_role: rsm_tools
+{% else %}
+default_role: min_fp_ga
+{% endif %}

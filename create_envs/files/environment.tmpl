@@ -1,0 +1,31 @@
+# -*- coding: utf-8 -*-
+# vim: ft=sls
+
+{%- if salt.pkg.version('salt-master') %}
+
+pillar_roots:
+  base:
+    - /srv/pillar
+{%- for envname, formulas in salt['pillar.get']('create_envs', {}).iteritems() %}
+  {{ envname }}:
+    - /srv/pillar/{{ envname }}
+{%- endfor %}
+
+file_roots:
+  base:
+    - /srv/salt
+    - /srv/formulas
+    - /srv/versioned_formulas
+{%- for envname, formulas in salt['pillar.get']('create_envs', {}).iteritems() %}
+  {{ envname }}:
+    - /srv/salt
+    - /srv/salt/{{ envname }}
+    - /srv/formulas
+    - /srv/formulas/{{ envname }}
+  {%- if envname == 'mom' or 'rsm' in envname %}
+    - /srv/versioned_formulas
+  {%- endif %}
+
+{%- endfor %}
+
+{%- endif %}

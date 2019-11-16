@@ -1,0 +1,53 @@
+# -*- coding: utf-8 -*-
+# vim: ft=sls
+{%- from tpldir + "/map.jinja" import role, common_formulas with context %}
+
+# get environment pillar data
+{%- set environment = salt['pillar.get']('create_envs:' + environ, {}) %}
+
+{% set common_formulas_formulas = common_formulas.get('formulas', {}) %}
+
+# merge common formulas with environment formulas.
+{%- set new_formulas = salt.slsutil.merge(common_formulas_formulas, environment.get('formulas', {})) %}
+
+{{ environ }}:
+  '*':
+    - create_envs
+    - create_envs_version
+{%- for formula_name, formula_options in new_formulas.items() %}
+  {%- if formula_options.version is defined %}
+    {%- set envpillar = ['/srv/versioned_formulas/',formula_name,'_',formula_options.version,'/',environ,'.sls'] | join ('') %}
+    {%- set defaultpillar = ['/srv/versioned_formulas/',formula_name,'_',formula_options.version,'/',formula_name,'.sls'] | join ('') -%}
+    {%- set defaultversion = ['/srv/versioned_formulas/',formula_name,'_',formula_options.version,'/',formula_name,'_version.sls'] | join ('') -%}
+
+    {%- if salt['file.file_exists'](defaultversion) %}
+    - {{ formula_name }}_version
+    {%- endif %}
+
+###
+# Assign common pillars first, so that if there is an override in the role pillar, or additional pillars
+# then it will override.
+#
+# if the same value is defined in the common pillar files, and the additional pillar files,
+#    then the additional pillar value will overwrite the common pillar value.
+###
+    {%- if formula_options.common_pillars is defined %}
+      {%- for common_pillar in formula_options.common_pillars %}
+      {#- within salt directory breaks are represented with "." so replace "/" with "." in top file #}
+    - {{ formula_name }}_{{ common_pillar | replace("/", ".") }}
+      {%- endfor %}
+    {%- endif -%}
+
+    {%- if salt['file.file_exists'](envpillar) or salt['file.file_exists'](defaultpillar) %}
+    - {{ formula_name }}
+    {%- endif -%}
+
+    {%- if formula_options.additional_pillars is defined %}
+      {%- for additional_pillar in formula_options.additional_pillars %}
+      {#- within salt directory breaks are represented with "." so replace "/" with "." in top file #}
+    - {{ formula_name }}_{{ additional_pillar | replace("/", ".") }}
+      {%- endfor %}
+    {%- endif -%}
+
+  {%- endif %}
+{%- endfor %}

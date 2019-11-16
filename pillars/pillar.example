@@ -1,0 +1,125 @@
+# -*- coding: utf-8 -*-
+# vim: ft=sls
+
+####
+# Default role based on ID.
+# Need to move completely to CDNCMDB
+#
+# if salt_role defined in cdncmdb then will use that value
+####
+{% if "mom" in grains['id'] %}
+default_role: mom
+{% elif "rsm" in grains['id'] %}
+default_role: rsm_tools
+{% else %}
+default_role: min_tools
+{% endif %}
+
+# no need to define create_envs in common_formulas
+
+# mom = Master of Masters (includes local master cache for all job information)
+# rsm = Regional Salt Master (with syndic and master processes)
+# min = minion (no master capability)
+
+# These are the common formulas available for any minions of this master type.
+# i.e. any minion of the mom
+common_formulas_default_config:
+  # role
+  mom:
+    # define common formulas available on this master
+    # can be overridden in the roles below in create_envs section
+    formulas:
+      # formula name
+      firewalld:
+        # formula version
+        version: 0.1.1
+      logrotate:
+        version: 0.1.0
+      postgres:
+        version: 0.1.0
+      salt_manage:
+        version: 0.1.0
+        # any additional pillars for this formula
+        additional_pillars:
+          - salt_manage_pillar2
+      sudoers:
+        version: 0.1.0
+      users:
+        version: 0.1.0
+        # can include a list of additional pillars.
+        additional_pillars:
+          - cdnsalt
+          - na_sysadmin
+  rsm_fp:
+    formulas:
+      logrotate:
+        version: 0.1.0
+      users:
+        version: 0.1.0
+  rsm_tools:
+    formulas:
+      logrotate:
+        version: 0.1.0
+      users:
+        version: 0.1.0
+  rsm_tools_public:
+    formulas:
+      logrotate:
+        version: 0.1.0
+      users:
+        version: 0.1.0
+
+create_envs:
+  mom:
+    # choose the master(s) for this role
+    # Note: is a list
+    masters:
+      - mom
+    # define any additional formulas to add to common_formulas from mom
+    formulas:
+      local_master_cache:
+        version: 0.1.0
+  rsm_tools:
+    masters:
+      - mom
+    # define any additional formulas to add to common_formulas from mom
+    # inherits common_formulas from master
+    formulas:
+      rsm_role:
+        version: 0.1.0
+      firewalld:
+        # override the version from common formulas to use different version
+        version: 0.1.1
+  rsm_tools_public:
+    masters:
+      - mom
+    # define any additional formulas to add to common_formulas from mom
+    # inherits common_formulas from master
+    formulas:
+      rsm_role:
+        version: 0.1.0
+  rsm_fp:
+    masters:
+      - mom
+    formulas:
+      rsm_role:
+        # choose the version you want
+        version: 0.1.1
+      salt_manage:
+        # use default version from common formulas
+        ## Override salt_manage_pillar2 from common formulas
+        additional_pillars:
+          - salt_manage_alt_pillar2
+  min_tools:
+    # this role can be applied to servers that are minions of either
+    # - rsm_tools - in the IDC
+    # - rsm_tools_public - out in public IP space
+    masters:
+      - rsm_tools
+      - rsm_tools_public
+  min_fp_ga:
+    masters:
+      - rsm_fp
+  min_wowza_ga:
+    masters:
+      - rsm_aos

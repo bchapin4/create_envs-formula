@@ -1,0 +1,188 @@
+---
+driver:
+  name: docker
+  use_sudo: false
+  privileged: true
+  run_options:
+    - '--add-host=salt:127.0.0.1'
+#  Example mount option.
+#  run_options:
+#    - '--mount type=bind,source="$(pwd)",target=/project'
+  provision_command:
+    - 'yum install -y net-tools tree'
+    - 'useradd cdnsalt'
+# Note: These are setup to test cleanup code.
+    - 'mkdir -p /srv/pillar'
+    - 'mkdir -p /srv/formulas/test_env3/example_c'
+    - 'mkdir -p /srv/pillar/test_env3'
+    - 'touch /srv/pillar/test_env3/example_c.sls'
+    - 'mkdir -p /srv/versioned_formulas/should_be_removed'
+    - 'mkdir -p /srv/versioned_formulas/create_envs'
+    - 'ln -sf /tmp/kitchen/srv/salt/create_envs /srv/versioned_formulas/create_envs'
+    - 'touch /srv/versioned_formulas/should_exist'
+# this is managed via initial deployment
+    - 'ln -sf /tmp/kitchen/srv/pillar/create_envs.sls /srv/pillar'
+
+# This provisioner uses a testing_stubs state for testing that sets up the environment
+#    on test machine dynamically based on the create_envs.sls pillar file
+#
+# Note: I ran into issues where if you are doing jinja tests on the environment
+#       the tests fail. This is because the jinja pass happend before the
+#       test state is applied.
+# Found 2 resolutions:
+#   1) move tests to the salt pass. (see {{ envname }}_{{ formuladir }}_exists) in config.sls)
+#      Note: set to failhard: True
+#   2) move setup to jinja pass (see testing_version_formula_stubs.sls)
+#
+provisioner:
+  name: salt_solo
+  salt_bootstrap_options: stable 2019.2.0
+#  dependencies:
+#    # requires download in .gitlab-ci.yml prior to testing.
+#    - name: salt_manage
+#      path: ./salt_manage-formula
+  salt_minion_extra_config:
+    fileserver_list_cache_time: 0
+#    log_level_logfile: debug
+#    log_level: debug
+    deploy_location: test
+    file_roots:
+      base:
+        - /srv/versioned_formulas
+        - /tmp/kitchen/srv/salt
+      mom:
+        - /srv/salt
+        - /srv/salt/mom
+        - /srv/formulas
+        - /srv/formulas/mom
+        - /srv/versioned_formulas
+    pillar_roots:
+      base:
+        - /tmp/kitchen/srv/pillar
+      mom:
+        - /srv/pillar
+  formula: create_envs
+  state_top:
+    base:
+      "*":
+        # testing only state
+        - create_envs.testing_stubs.testing_version_formula_stubs
+        - create_envs
+
+platforms:
+  - name: centos-7
+    driver_config:
+      run_command: /sbin/init
+
+suites:
+# Tests (functionality as will run on the MOM)
+#   - All symlinks get created properly
+#   - All old symlinks get cleaned up
+#   - Pillar top file created properly
+#   - Configs updated
+#   - Salt Restarted
+  - name: default
+    provisioner:
+      salt_minion_id: saltmom
+      salt_bootstrap_options: -M stable 2019.2.0
+      pillars-from-files:
+        create_envs.sls: test_pillars/default_testing.sls
+        default_sync_syndic.sls: test_pillars/default_sync_syndic.sls
+      state_top:
+        base:
+          "*":
+            # testing only state
+            - create_envs.testing_stubs.testing_version_formula_stubs
+            - create_envs.testing_stubs.make_etc_salt_symlinks
+            - create_envs
+            - create_envs.testing_stubs.wait_for_bg_restarts
+      pillars:
+        top.sls:
+          base:
+            "*":
+              - create_envs
+        salt_role.sls:
+          cmdb:
+            config_items:
+              salt_role: mom
+# Validates a properly formatted create_envs.sls
+#
+# This test can be used after a pillar/create_envs.sls file has been created
+  # - name: valid_create_envs_pillar
+  #   provisioner:
+  #     salt_minion_id: saltmom
+  #     salt_bootstrap_options: -M stable 2019.2.0
+  #     pillars-from-files:
+  #       create_envs.sls: pillars/create_envs.sls
+  #       role_base.sls: test_pillars/role_base.sls
+  #     pillars:
+  #       top.sls:
+  #         base:
+  #           "*":
+  #             - create_envs
+  #             - role_base
+  #     state_top:
+  #       base:
+  #         "*":
+  #           # testing only state
+  #           - create_envs.testing_stubs.testing_version_formula_stubs
+  #           - create_envs
+  #           - create_envs.testing_stubs.wait_for_bg_restarts
+# Tests Sync versioned formulas from MOM down to RSMs
+#   - Sync
+  - name: validate_sync_formulas_to_syndic
+    provisioner:
+      salt_minion_id: saltrsm
+      salt_bootstrap_options: -M -S stable 2019.2.0
+      pillars-from-files:
+        default_sync_syndic.sls: test_pillars/default_sync_syndic.sls
+        create_envs.sls: test_pillars/default_testing.sls
+      pillars:
+        salt_role.sls:
+          cmdb:
+            config_items:
+              salt_role: rsm_fp
+        top.sls:
+          base:
+            "*":
+              - salt_role
+              - default_sync_syndic
+              - create_envs
+      state_top:
+        base:
+          "*":
+            # testing only state
+            - create_envs.testing_stubs.testing_version_formula_stubs
+            - create_envs.testing_stubs.make_etc_salt_symlinks
+            - create_envs
+# Tests functionality as will non-masters - minion only
+#   - configure minion_saltenv.conf
+#   - restart minion
+  - name: validate_minion
+    provisioner:
+      salt_minion_id: saltmin
+      pillars-from-files:
+        create_envs.sls: test_pillars/default_testing.sls
+      state_top:
+        base:
+          "*":
+            # testing only state
+            - create_envs.testing_stubs.testing_version_formula_stubs
+            - create_envs.testing_stubs.make_etc_salt_symlinks
+            - create_envs
+            - create_envs.testing_stubs.wait_for_bg_restarts
+      pillars:
+        salt_role.sls:
+          cmdb:
+            config_items:
+              salt_role: test_env
+        top.sls:
+          base:
+            "*":
+              - salt_role
+              - create_envs
+
+verifier:
+  name: shell
+  remote_exec: false
+  command: testinfra -vvv --connection=docker --hosts=root@$KITCHEN_CONTAINER_ID --junit-xml junit-$KITCHEN_INSTANCE.xml test/integration/$KITCHEN_SUITE

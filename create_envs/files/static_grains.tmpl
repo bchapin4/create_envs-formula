@@ -1,0 +1,7 @@
+# Delivered by create_envs formula
+
+{%- set dep_loc = salt['config.get']('deploy_location', 'unset2') %}
+deploy_location: {{ dep_loc }}
+
+# We may want to add support for adding static grains to the pillar.
+# No need yet, so not adding - BWC

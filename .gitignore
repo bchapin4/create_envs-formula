@@ -1,0 +1,10 @@
+.pytest_cache/
+.kitchen/
+kitchen.out
+*.swp
+*.swo
+*.pyc
+junit*.xml
+.kitchen.local.yml
+formulaenv/
+*-formula

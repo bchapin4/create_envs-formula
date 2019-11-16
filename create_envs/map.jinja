@@ -1,0 +1,15 @@
+# -*- coding: utf-8 -*-
+# vim: ft=jinja
+
+{## Start imports ##}
+{% set tplroot = tpldir.split('/')[0] %}
+{% import_yaml tplroot + "/default_role.yaml" as defaults %}
+
+{%- set BASE_PILLAR_DIR = '/srv/pillar/' %}
+{%- set BASE_FORMULAS_DIR = '/srv/formulas/' %}
+{%- set BASE_VERSIONED_FORMULA_DIR = '/srv/versioned_formulas/' %}
+
+{%- set role = salt['pillar.get']('cmdb:config_items:salt_role', defaults.default_role) %}
+{%- set create_envs_pillar = salt['pillar.get']('create_envs', {}) %}
+{%- set common_formulas = salt['pillar.get']('common_formulas_default_config:' ~ role, {}) %}
+
